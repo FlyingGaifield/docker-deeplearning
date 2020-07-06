@@ -1,0 +1,55 @@
+FROM nvidia/cuda:9.0-cudnn7-devel
+#############################
+##     basic operations    ##
+#############################
+ENV LANG C.UTF-8
+RUN APT_INSTALL="apt-get install -y --no-install-recommends" && \
+    PIP_INSTALL="python -m pip --no-cache-dir install --upgrade" && \
+    GIT_CLONE="git clone --depth 10" && \
+
+    rm -rf /var/lib/apt/lists/* \
+           /etc/apt/sources.list.d/cuda.list \
+           /etc/apt/sources.list.d/nvidia-ml.list && \
+
+    apt-get update && \
+
+#############################
+##      basic tools        ##
+#############################
+    DEBIAN_FRONTEND=noninteractive $APT_INSTALL \
+        libssl-dev \
+        build-essential \
+        apt-utils \
+        ca-certificates \
+        wget \
+        git \
+        vim \
+        python-pip \
+        net-tools \
+        iproute2 \
+        && \
+
+    $GIT_CLONE https://github.com/Kitware/CMake ~/cmake && \
+    cd ~/cmake && \
+    ./bootstrap && \
+    make -j"$(nproc)" install 
+
+
+#############################
+##      install ssh        ##
+#############################
+RUN apt-get update && apt-get install -y openssh-server
+RUN mkdir /var/run/sshd
+RUN echo 'root:songjf' | chpasswd
+RUN sed -i 's/PermitRootLogin prohibit-password/PermitRootLogin yes/'  /etc/ssh/sshd_config
+RUN sed -i 's/UsePAM yes/UsePAM no/' /etc/ssh/sshd_config
+RUN sed -i 's/StrictModes yes/StrictModes no/' /etc/ssh/sshd_config
+
+# SSH login fix. Otherwise user is kicked off after login
+RUN sed 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so@g' -i /etc/pam.d/sshd
+
+ENV NOTVISIBLE "in users profile"
+RUN echo "export VISIBLE=now" >> /etc/profile
+
+EXPOSE 22
+CMD ["/usr/sbin/sshd", "-D"]
